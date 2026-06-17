@@ -34,28 +34,75 @@ else:
 
 #=================DateSystem===================
 
-start_date = date(2026, 6, 19)
+start_date = date(2026, 6, 17)
 end_date = date(2026, 7, 2)
 
 
 
 #=============Questions(TOP SECRET USA AIRBASE PASSWORD IS HERE)===================
 
-questions = [
-    "WHAT THE HELLLLLL? ",
-    "Who invented Python?",
-    "Which is faster, frontend or backend? ",
-    "What is 2 + 2 in computer language?",
-    "Why is the library WiFi always slow? "
+questions = [{
+    "question": "Question 1",
+    "choices" : ["A","B","C","D"],
+    "answer": "A"
+},{
+    "question": "Question 2",
+    "choices" : ["A","B","C","D"],
+    "answer": "B"
+},{
+    "question": "Question 3",
+    "choices" : ["A","B","C","D"],
+    "answer": "C"
+},{
+    "question": "Question 4",
+    "choices" : ["A","B","C","D"],
+    "answer": "D"
+},{
+    "question": "Question 5",
+    "choices" : ["A","B","C","D"],
+    "answer": "A"
+},{
+    "question": "Question 6",
+    "choices" : ["A","B","C","D"],
+    "answer": "B"
+},{ 
+    "question": "Question 7",
+    "choices" : ["A","B","C","D"],
+    "answer": "C"
+},{
+    "question": "Question 8",
+    "choices" : ["A","B","C","D"],
+    "answer": "A"
+},{
+    "question": "Question 9",
+    "choices" : ["A","B","C","D"],
+    "answer": "D"
+},{
+    "question": "Question 10",
+    "choices" : ["A","B","C","D"],
+    "answer": "B"
+},{
+    "question": "Question 11",
+    "choices" : ["A","B","C","D"],
+    "answer": "C"
+},{
+    "question": "Question 12",
+    "choices" : ["A","B","C","D"],
+    "answer": "A"
+},{
+    "question": "Question 13",
+    "choices" : ["A","B","C","D"],
+    "answer": "B"
+},{
+    "question": "Question 14",
+    "choices" : ["A","B","C","D"],
+    "answer": "C"
+
+}
 ]
 
-correct_answers = {
-    1: "A",
-    2: "B",
-    3: "C",
-    4: "D",
-    5: "A"
-}
+
+
 
 #===============Main==============
 
@@ -102,7 +149,8 @@ def question():
 
     return jsonify({
         "questionNo": day_index + 1,
-        "question": current_question_global
+        "question": current_question_global["question"],
+        "choices": current_question_global["choices"]
     })
 #=============Submit===========================
 
@@ -127,7 +175,7 @@ def submit():
         }), 400
 
     # check correct answer
-    correct_answer = correct_answers.get(question_no)
+    correct_answer = questions[day_index_global]["answer"]
     is_correct = (answer == correct_answer)
 
     # prevent duplicate per day per question
