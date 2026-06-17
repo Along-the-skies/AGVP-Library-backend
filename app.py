@@ -183,6 +183,13 @@ def submit():
             "status": "error",
             "message": "Missing fields"
         }), 400
+    
+    if not phone.isdigit() or len(phone) != 10:
+        return jsonify({"status":"error","message":"Invalid phone number"}), 400
+
+    if name.lower() == "admin":
+        return jsonify({"status":"error","message":"Reserved name not allowed"}), 400
+
 
     # check correct answer
     correct_answer = questions[day_index_global]["answer"]
@@ -247,14 +254,43 @@ def submit():
     })
 
 
-@app.route("/Submissions")
-def get_submissions():
+
+@app.route("/submissions")
+def submissions_view():
     password = request.args.get("password")
+    if password != "Agp2026access:BinoyMathew":
+        return "Unauthorized", 403
 
-    if password != ADMIN_PASSWORD:
-        return jsonify({"status": "error", "message": "Invalid password"}), 401
+    # Load all submissions
+    with open("submissions.json", "r") as f:
+        submissions = json.load(f)
 
-    return jsonify(submissions)
+    # Group by date
+    grouped = {}
+    for sub in submissions:
+        date = sub["date"]
+        grouped.setdefault(date, []).append(sub)
+
+    # Sort dates (latest first)
+    sorted_dates = sorted(grouped.keys(), reverse=True)
+
+    # Build HTML
+    html = "<html><head><link rel='stylesheet' href='/static/style.css'></head><body>"
+    html += "<h1>Quiz Submissions (Admin View)</h1>"
+
+    # Limit to 14 tables
+    for date in sorted_dates[:14]:
+        html += f"<h2>{date} Leaderboard</h2>"
+        html += "<table class='leaderboard'><tr><th>Name</th><th>Phone</th><th>Question</th><th>Answer</th><th>Correct</th><th>Time Taken</th></tr>"
+        # Sort by timeTaken for leaderboard style
+        day_subs = sorted(grouped[date], key=lambda x: x["timeTaken"])
+        for sub in day_subs:
+            html += f"<tr><td>{sub['name']}</td><td>{sub['phone']}</td><td>{sub['questionNo']}</td><td>{sub['answer']}</td><td>{'✅' if sub['isCorrect'] else '❌'}</td><td>{sub['timeTaken']}s</td></tr>"
+        html += "</table><br>"
+    html += "</body></html>"
+
+    return html
+
 
 
 @app.route("/leaderboard")
