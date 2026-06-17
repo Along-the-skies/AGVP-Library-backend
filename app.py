@@ -258,7 +258,7 @@ def submit():
 @app.route("/submissions")
 def submissions_view():
     password = request.args.get("password")
-    if password != "Agp2026access:BinoyMathew":
+    if password != ADMIN_PASSWORD:
         return "Unauthorized", 403
 
     # Load all submissions
@@ -274,22 +274,29 @@ def submissions_view():
     # Sort dates (latest first)
     sorted_dates = sorted(grouped.keys(), reverse=True)
 
-    # Build HTML
     html = "<html><head><link rel='stylesheet' href='/static/style.css'></head><body>"
     html += "<h1>Quiz Submissions (Admin View)</h1>"
 
-    # Limit to 14 tables
-    for date in sorted_dates[:14]:
-        html += f"<h2>{date} Leaderboard</h2>"
-        html += "<table class='leaderboard'><tr><th>Name</th><th>Phone</th><th>Question</th><th>Answer</th><th>Correct</th><th>Time Taken</th></tr>"
-        # Sort by timeTaken for leaderboard style
-        day_subs = sorted(grouped[date], key=lambda x: x["timeTaken"])
-        for sub in day_subs:
-            html += f"<tr><td>{sub['name']}</td><td>{sub['phone']}</td><td>{sub['questionNo']}</td><td>{sub['answer']}</td><td>{'✅' if sub['isCorrect'] else '❌'}</td><td>{sub['timeTaken']}s</td></tr>"
-        html += "</table><br>"
-    html += "</body></html>"
+    # Always show 14 leaderboards
+    for i in range(14):
+        if i < len(sorted_dates):
+            date = sorted_dates[i]
+            html += f"<h2>{date} Leaderboard</h2>"
+            html += "<table class='leaderboard'><tr><th>Name</th><th>Phone</th><th>Question</th><th>Answer</th><th>Correct</th><th>Time Taken</th></tr>"
+            day_subs = sorted(grouped[date], key=lambda x: x["timeTaken"])
+            for sub in day_subs:
+                html += f"<tr><td>{sub['name']}</td><td>{sub['phone']}</td><td>{sub['questionNo']}</td><td>{sub['answer']}</td><td>{'✅' if sub['isCorrect'] else '❌'}</td><td>{sub['timeTaken']}s</td></tr>"
+            html += "</table><br>"
+        else:
+            # Empty table placeholder
+            html += f"<h2>Leaderboard {i+1} (No Data)</h2>"
+            html += "<table class='leaderboard'><tr><th>Name</th><th>Phone</th><th>Question</th><th>Answer</th><th>Correct</th><th>Time Taken</th></tr>"
+            html += "<tr><td colspan='6'>No submissions yet</td></tr>"
+            html += "</table><br>"
 
+    html += "</body></html>"
     return html
+
 
 
 
