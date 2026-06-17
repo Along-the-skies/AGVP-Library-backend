@@ -257,25 +257,19 @@ def submit():
 
 from urllib.parse import unquote
 
-from urllib.parse import unquote
-
 @app.route("/submissions")
 def submissions_view():
     password = request.args.get("password")
-    # Decode URL-encoded characters like %3A back to :
-    print("Password:", password)
+    print(password)
     if not password or unquote(password).strip() != ADMIN_PASSWORD:
         return "Unauthorized", 403
-    
-    if os.path.exists("submissions.json"):
+
+    # ✅ Safe load: if file missing, use empty list
+    if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r") as f:
             submissions = json.load(f)
     else:
         submissions = []
-
-    # Load all submissions
-    with open("submissions.json", "r") as f:
-        submissions = json.load(f)
 
     # Group by date
     grouped = {}
@@ -306,16 +300,6 @@ def submissions_view():
 
     html += "</body></html>"
     return html
-
-
-
-
-
-
-
-
-
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
