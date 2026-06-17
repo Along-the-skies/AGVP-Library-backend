@@ -266,6 +266,12 @@ def submissions_view():
     print("Password:", password)
     if not password or unquote(password).strip() != ADMIN_PASSWORD:
         return "Unauthorized", 403
+    
+    if os.path.exists("submissions.json"):
+        with open(DATA_FILE, "r") as f:
+            submissions = json.load(f)
+    else:
+        submissions = []
 
     # Load all submissions
     with open("submissions.json", "r") as f:
