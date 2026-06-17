@@ -257,13 +257,15 @@ def submit():
 
 from urllib.parse import unquote
 
+from urllib.parse import unquote
+
 @app.route("/submissions")
 def submissions_view():
     password = request.args.get("password")
+    # Decode URL-encoded characters like %3A back to :
+    print("Password:", password)
     if not password or unquote(password).strip() != ADMIN_PASSWORD:
         return "Unauthorized", 403
-    ...
-
 
     # Load all submissions
     with open("submissions.json", "r") as f:
@@ -275,7 +277,6 @@ def submissions_view():
         date = sub["date"]
         grouped.setdefault(date, []).append(sub)
 
-    # Sort dates (latest first)
     sorted_dates = sorted(grouped.keys(), reverse=True)
 
     html = "<html><head><link rel='stylesheet' href='/static/style.css'></head><body>"
@@ -292,7 +293,6 @@ def submissions_view():
                 html += f"<tr><td>{sub['name']}</td><td>{sub['phone']}</td><td>{sub['questionNo']}</td><td>{sub['answer']}</td><td>{'✅' if sub['isCorrect'] else '❌'}</td><td>{sub['timeTaken']}s</td></tr>"
             html += "</table><br>"
         else:
-            # Empty table placeholder
             html += f"<h2>Leaderboard {i+1} (No Data)</h2>"
             html += "<table class='leaderboard'><tr><th>Name</th><th>Phone</th><th>Question</th><th>Answer</th><th>Correct</th><th>Time Taken</th></tr>"
             html += "<tr><td colspan='6'>No submissions yet</td></tr>"
@@ -300,6 +300,7 @@ def submissions_view():
 
     html += "</body></html>"
     return html
+
 
 
 
