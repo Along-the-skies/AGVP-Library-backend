@@ -34,7 +34,7 @@ else:
 
 #=================DateSystem===================
 
-start_date = date(2026, 6, 17)
+start_date = date(2026, 6, 19)
 end_date = date(2026, 7, 2)
 
 
