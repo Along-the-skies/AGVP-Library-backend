@@ -2,8 +2,13 @@ from flask import Flask , jsonify,request
 import json
 import os
 from datetime import date
+from flask-cors import CORS
+
 
 app = Flask(__name__) #APP
+CORS(app)
+
+qa_archive = []
 
 submissions = []
 
