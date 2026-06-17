@@ -293,27 +293,7 @@ def submissions_view():
 
 
 
-@app.route("/leaderboard")
-def leaderboard():
-    today = str(date.today())
 
-    today_data = [
-        s for s in submissions
-        if s.get("date") == today and s.get("timeTaken") is not None
-    ]
-
-    # sort fastest first
-    sorted_data = sorted(today_data, key=lambda x: x["timeTaken"])
-
-    # assign rank
-    for i, entry in enumerate(sorted_data):
-        entry["rank"] = i + 1
-
-    return jsonify({
-        "date": today,
-        "count": len(sorted_data),
-        "leaderboard": sorted_data
-    })
 
 
 
