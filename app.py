@@ -255,11 +255,15 @@ def submit():
 
 
 
+from urllib.parse import unquote
+
 @app.route("/submissions")
 def submissions_view():
     password = request.args.get("password")
-    if password != ADMIN_PASSWORD:
+    if not password or unquote(password).strip() != ADMIN_PASSWORD:
         return "Unauthorized", 403
+    ...
+
 
     # Load all submissions
     with open("submissions.json", "r") as f:
