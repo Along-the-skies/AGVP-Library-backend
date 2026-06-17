@@ -116,12 +116,22 @@ def main():
 
 @app.route("/reading-day-quiz")
 def reading_day_quiz():
+    today = date.today()
+
+    if today < start_date:
+        status = "not_started"
+    elif today > end_date:
+        status = "ended"
+    else:
+        status = "online"
+
     return jsonify({
-        "title":"Reading day quiz",
-        "status" : "online",
-        "startDate": "2026-06-19",
-        "endDate": "2026-07-02"
+        "title": "Reading day quiz",
+        "status": status,
+        "startDate": str(start_date),
+        "endDate": str(end_date)
     })
+
 
 
 #=====================Questions================
