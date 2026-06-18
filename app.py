@@ -9,7 +9,7 @@ CORS(app)
 
 DATA_FILE = "submissions.json"
 ARCHIVE_FILE = "qa_archive.json"
-ADMIN_PASSWORD = "Agp2026access:BinoyMathew"
+ADMIN_PASSWORD = "Agp2026access_BinoyMathew"
 
 # Load submissions
 if os.path.exists(DATA_FILE):
