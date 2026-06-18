@@ -260,46 +260,30 @@ from urllib.parse import unquote
 @app.route("/submissions")
 def submissions_view():
     password = request.args.get("password")
-    print(password)
     if not password or unquote(password).strip() != ADMIN_PASSWORD:
-        return "Unauthorized", 403
+        return jsonify({"error": "Unauthorized"}), 403
 
-    # ✅ Safe load: if file missing, use empty list
+    # Load submissions file
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r") as f:
             submissions = json.load(f)
     else:
         submissions = []
 
-    # Group by date
+    # Group by question number → day1…day14
     grouped = {}
     for sub in submissions:
-        date = sub["date"]
-        grouped.setdefault(date, []).append(sub)
+        day_key = f"day{sub['questionNo']}"
+        grouped.setdefault(day_key, []).append(sub)
 
-    sorted_dates = sorted(grouped.keys(), reverse=True)
+    # Always return 14 days
+    result = {}
+    for i in range(1, 15):
+        key = f"day{i}"
+        result[key] = grouped.get(key, [])
 
-    html = "<html><head><link rel='stylesheet' href='/static/style.css'></head><body>"
-    html += "<h1>Quiz Submissions (Admin View)</h1>"
+    return jsonify(result)
 
-    # Always show 14 leaderboards
-    for i in range(14):
-        if i < len(sorted_dates):
-            date = sorted_dates[i]
-            html += f"<h2>{date} Leaderboard</h2>"
-            html += "<table class='leaderboard'><tr><th>Name</th><th>Phone</th><th>Question</th><th>Answer</th><th>Correct</th><th>Time Taken</th></tr>"
-            day_subs = sorted(grouped[date], key=lambda x: x["timeTaken"])
-            for sub in day_subs:
-                html += f"<tr><td>{sub['name']}</td><td>{sub['phone']}</td><td>{sub['questionNo']}</td><td>{sub['answer']}</td><td>{'✅' if sub['isCorrect'] else '❌'}</td><td>{sub['timeTaken']}s</td></tr>"
-            html += "</table><br>"
-        else:
-            html += f"<h2>Leaderboard {i+1} (No Data)</h2>"
-            html += "<table class='leaderboard'><tr><th>Name</th><th>Phone</th><th>Question</th><th>Answer</th><th>Correct</th><th>Time Taken</th></tr>"
-            html += "<tr><td colspan='6'>No submissions yet</td></tr>"
-            html += "</table><br>"
-
-    html += "</body></html>"
-    return html
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
