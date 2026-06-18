@@ -194,11 +194,12 @@ import os
 @app.route("/db-test")
 def db_test():
     try:
-        conn = psycopg2.connect(os.environ["DATABASE_URL"])
-
-        cur = conn.cursor(["DATABASE_URL"])
+        conn = psycopg2.connect(
+            os.environ["DATABASE_URL"]
+        )
 
         cur = conn.cursor()
+
         cur.execute("SELECT 1")
 
         result = cur.fetchone()
@@ -206,7 +207,10 @@ def db_test():
         cur.close()
         conn.close()
 
-        return {"status": "connected"}
+        return {
+            "status": "connected",
+            "result": result[0]
+        }
 
     except Exception as e:
         return {
