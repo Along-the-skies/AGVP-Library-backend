@@ -17,6 +17,8 @@ CORS(app)
 DATA_FILE = "submissions.json"
 ARCHIVE_FILE = "qa_archive.json"
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Agp2026access_BinoyMathew")
+if ADMIN_PASSWORD is not None:
+    ADMIN_PASSWORD = ADMIN_PASSWORD.strip()
 
 
 def load_json_file(path, default):
