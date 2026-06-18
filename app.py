@@ -195,7 +195,9 @@ import os
 @app.route("/db-test")
 def db_test():
     try:
-        conn = psycopg2.connect(os.environ["DATABASE_URL"])
+        conn = psycopg2.connect(os.environ.get("DATABASE_URL"))
+
+        cur = conn.cursor(["DATABASE_URL"])
 
         cur = conn.cursor()
         cur.execute("SELECT 1")
