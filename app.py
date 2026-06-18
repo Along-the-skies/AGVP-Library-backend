@@ -10,6 +10,7 @@ CORS(app)
 DATA_FILE = "submissions.json"
 ARCHIVE_FILE = "qa_archive.json"
 ADMIN_PASSWORD = "Agp2026access_BinoyMathew"
+DATABASE_URL="postgresql://anonymous@ep-rapid-grass-aokkocyp-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
 # Load submissions
 if os.path.exists(DATA_FILE):
@@ -185,6 +186,32 @@ def submissions_view():
 
     html += "</body></html>"
     return html
+
+
+
+import psycopg2
+import os
+
+@app.route("/db-test")
+def db_test():
+    try:
+        conn = psycopg2.connect(os.environ["DATABASE_URL"])
+
+        cur = conn.cursor()
+        cur.execute("SELECT 1")
+
+        result = cur.fetchone()
+
+        cur.close()
+        conn.close()
+
+        return {"status": "connected"}
+
+    except Exception as e:
+        return {
+            "status": "failed",
+            "error": str(e)
+        }, 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
