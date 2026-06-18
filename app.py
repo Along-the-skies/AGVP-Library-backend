@@ -1,29 +1,17 @@
 from flask import Flask, jsonify, request
-import json, os
 from datetime import date
 from flask_cors import CORS
 from urllib.parse import unquote
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import json   # ✅ Added back
 
 app = Flask(__name__)
 CORS(app)
 
-DATA_FILE = "submissions.json"
-ARCHIVE_FILE = "qa_archive.json"
-ADMIN_PASSWORD = "Agp2026access_BinoyMathew"
-
-# Load submissions
-if os.path.exists(DATA_FILE):
-    with open(DATA_FILE, "r") as f:
-        submissions = json.load(f)
-else:
-    submissions = []
-
-# Load archive
-if os.path.exists(ARCHIVE_FILE):
-    with open(ARCHIVE_FILE, "r") as f:
-        qa_archive = json.load(f)
-else:
-    qa_archive = []
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "default_password")
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 # Dates
 start_date = date(2026, 6, 19)
@@ -47,12 +35,12 @@ questions = [
     {"question": "Question 14", "choices": ["A","B","C","D"], "answer": "C"}
 ]
 
-day_index_global = 0
-current_question_global = {}
+def get_db_connection():
+    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
 @app.route('/')
 def main():
-    return "AGVP Library Quiz Backend"
+    return "AGVP Library Quiz Backend (Postgres)"
 
 @app.route("/reading-day-quiz")
 def reading_day_quiz():
@@ -80,13 +68,11 @@ def question():
     day_index = (today - start_date).days
     if day_index < 0 or day_index >= len(questions):
         return jsonify({"status": "no_question"})
-    global day_index_global, current_question_global
-    day_index_global = day_index
-    current_question_global = questions[day_index]
+    current_question = questions[day_index]
     return jsonify({
         "questionNo": day_index + 1,
-        "question": current_question_global["question"],
-        "choices": current_question_global["choices"]
+        "question": current_question["question"],
+        "choices": current_question["choices"]
     })
 
 @app.route("/submit", methods=["POST"])
@@ -97,50 +83,65 @@ def submit():
     answer = data.get("answer")
     question_no = data.get("questionNo")
     time_taken = data.get("timeTaken")
-    today = str(date.today())
+    today_str = str(date.today())
 
-    if not name or not phone or not answer or not question_no:
+    # ✅ Safer validation
+    try:
+        question_no = int(question_no)
+        if question_no < 1 or question_no > len(questions):
+            return jsonify({"status":"error","message":"Invalid question number"}), 400
+    except:
+        return jsonify({"status":"error","message":"Invalid question number"}), 400
+
+    if name is None or phone is None or answer is None:
         return jsonify({"status": "error", "message": "Missing fields"}), 400
     if not phone.isdigit() or len(phone) != 10:
         return jsonify({"status":"error","message":"Invalid phone number"}), 400
     if name.lower() == "admin":
         return jsonify({"status":"error","message":"Reserved name not allowed"}), 400
 
-    correct_answer = questions[day_index_global]["answer"]
+    correct_answer = questions[question_no - 1]["answer"]
     is_correct = (answer == correct_answer)
 
-    for entry in submissions:
-        if entry["phone"] == phone and entry.get("date") == today and entry.get("questionNo") == question_no:
-            return jsonify({"status": "error", "message": "Already submitted"}), 409
+    conn = get_db_connection()
+    cur = conn.cursor()
 
-    submission = {
+    # Check duplicate
+    cur.execute("""
+        SELECT 1 FROM submissions
+        WHERE phone=%s AND date=%s AND question_no=%s
+    """, (phone, today_str, question_no))
+    if cur.fetchone():
+        cur.close()
+        conn.close()
+        return jsonify({"status": "error", "message": "Already submitted"}), 409
+
+    # Insert submission
+    cur.execute("""
+        INSERT INTO submissions (name, phone, answer, question_no, time_taken, is_correct, date)
+        VALUES (%s,%s,%s,%s,%s,%s,%s)
+    """, (name, phone, answer, question_no, time_taken, is_correct, today_str))
+
+    # Archive (requires UNIQUE(date, question_no) on qa_archive)
+    submission_json = json.dumps([{
         "name": name,
         "phone": phone,
         "answer": answer,
         "questionNo": question_no,
         "timeTaken": time_taken,
         "isCorrect": is_correct,
-        "date": today
-    }
-    submissions.append(submission)
-    with open(DATA_FILE, "w") as f:
-        json.dump(submissions, f, indent=4)
+        "date": today_str
+    }])
+    cur.execute("""
+        INSERT INTO qa_archive (date, question_no, question, answer_data)
+        VALUES (%s,%s,%s,%s)
+        ON CONFLICT (date, question_no) DO UPDATE
+        SET answer_data = qa_archive.answer_data || %s
+    """, (today_str, question_no, questions[question_no-1]["question"], submission_json, submission_json))
 
-    found = False
-    for r in qa_archive:
-        if r["date"] == today and r["questionNo"] == question_no:
-            r["answers"].append(submission)
-            found = True
-            break
-    if not found:
-        qa_archive.append({
-            "date": today,
-            "questionNo": question_no,
-            "question": current_question_global,
-            "answers": [submission]
-        })
-    with open(ARCHIVE_FILE, "w") as f:
-        json.dump(qa_archive, f, indent=4)
+    conn.commit()
+    cur.close()
+    conn.close()
 
     return jsonify({"status": "success", "isCorrect": is_correct, "timeTaken": time_taken})
 
@@ -150,15 +151,16 @@ def submissions_view():
     if not password or unquote(password).strip() != ADMIN_PASSWORD:
         return "Unauthorized", 403
 
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r") as f:
-            subs = json.load(f)
-    else:
-        subs = []
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM submissions ORDER BY date DESC, time_taken ASC")
+    subs = cur.fetchall()
+    cur.close()
+    conn.close()
 
     grouped = {}
     for sub in subs:
-        date_key = sub.get("date")
+        date_key = sub["date"]
         grouped.setdefault(date_key, []).append(sub)
 
     sorted_dates = sorted(grouped.keys(), reverse=True)
@@ -167,57 +169,36 @@ def submissions_view():
     html += "<h1>Quiz Submissions (Admin View)</h1>"
     html += "<div style='display:grid; grid-template-columns:repeat(2, 1fr); gap:20px;'>"
 
-
     for i in range(14):
         if i < len(sorted_dates):
             date_key = sorted_dates[i]
             html += f"<div class='table-box'><h2>{date_key} Leaderboard</h2>"
             html += "<table class='leaderboard'><tr><th>Name</th><th>Phone</th><th>Question</th><th>Answer</th><th>Correct</th><th>Time Taken</th></tr>"
-            day_subs = sorted(grouped[date_key], key=lambda x: x["timeTaken"])
+            day_subs = sorted(grouped[date_key], key=lambda x: float(x["time_taken"]))
             for sub in day_subs:
-                html += f"<tr><td>{sub['name']}</td><td>{sub['phone']}</td><td>{sub['questionNo']}</td><td>{sub['answer']}</td><td>{'✅' if sub['isCorrect'] else '❌'}</td><td>{sub['timeTaken']}s</td></tr>"
+                html += f"<tr><td>{sub['name']}</td><td>{sub['phone']}</td><td>{sub['question_no']}</td><td>{sub['answer']}</td><td>{'✅' if sub['is_correct'] else '❌'}</td><td>{sub['time_taken']}s</td></tr>"
             html += "</table></div>"
         else:
             html += f"<div class='table-box'><h2>Leaderboard {i+1} (No Data)</h2>"
             html += "<table class='leaderboard'><tr><th>Name</th><th>Phone</th><th>Question</th><th>Answer</th><th>Correct</th><th>Time Taken</th></tr>"
             html += "<tr><td colspan='6'>No submissions yet</td></tr></table></div>"
 
-
     html += "</body></html>"
     return html
-
-
-
-import psycopg2
-import os
 
 @app.route("/db-test")
 def db_test():
     try:
-        conn = psycopg2.connect(
-            os.environ["DATABASE_URL"]
-        )
-
+        conn = get_db_connection()
         cur = conn.cursor()
-
         cur.execute("SELECT 1")
-
-        result = cur.fetchone()
-
+        cur.fetchone()
         cur.close()
         conn.close()
-
-        return {
-            "status": "connected",
-            "result": result[0]
-        }
-
+        return {"status": "connected"}   # ✅ simplified
     except Exception as e:
-        return {
-            "status": "failed",
-            "error": str(e)
-        }, 500
+        return {"status": "failed", "error": str(e)}, 500
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
