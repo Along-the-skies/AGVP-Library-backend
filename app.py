@@ -71,7 +71,7 @@ submissions = load_json_file(DATA_FILE, [])
 qa_archive = load_json_file(ARCHIVE_FILE, [])
 
 # Dates
-start_date = date(2026, 6, 18)
+start_date = date(2026, 6, 19)
 end_date = date(2026, 7, 2)
 
 # Questions
