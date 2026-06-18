@@ -7,25 +7,25 @@ from urllib.parse import unquote
 app = Flask(__name__)
 CORS(app)
 
-# Files + Password
 DATA_FILE = "submissions.json"
 ARCHIVE_FILE = "qa_archive.json"
 ADMIN_PASSWORD = "Agp2026access:BinoyMathew"
 
-# Load data safely
-def safe_load(path):
-    if os.path.exists(path):
-        try:
-            with open(path, "r") as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
+# Load submissions
+if os.path.exists(DATA_FILE):
+    with open(DATA_FILE, "r") as f:
+        submissions = json.load(f)
+else:
+    submissions = []
 
-submissions = safe_load(DATA_FILE)
-qa_archive = safe_load(ARCHIVE_FILE)
+# Load archive
+if os.path.exists(ARCHIVE_FILE):
+    with open(ARCHIVE_FILE, "r") as f:
+        qa_archive = json.load(f)
+else:
+    qa_archive = []
 
-# Date system
+# Dates
 start_date = date(2026, 6, 19)
 end_date = date(2026, 7, 2)
 
@@ -50,7 +50,6 @@ questions = [
 day_index_global = 0
 current_question_global = {}
 
-# Routes
 @app.route('/')
 def main():
     return "AGVP Library Quiz Backend"
@@ -149,23 +148,43 @@ def submit():
 def submissions_view():
     password = request.args.get("password")
     if not password or unquote(password).strip() != ADMIN_PASSWORD:
-        return jsonify({"error": "Unauthorized"}), 403
+        return "Unauthorized", 403
 
-    subs = safe_load(DATA_FILE)
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r") as f:
+            subs = json.load(f)
+    else:
+        subs = []
+
     grouped = {}
     for sub in subs:
-        qno = sub.get("questionNo")
-        if not qno:
-            continue
-        day_key = f"day{qno}"
-        grouped.setdefault(day_key, []).append(sub)
+        date_key = sub.get("date")
+        grouped.setdefault(date_key, []).append(sub)
 
-    result = {}
-    for i in range(1, 15):
-        key = f"day{i}"
-        result[key] = grouped.get(key, [])
+    sorted_dates = sorted(grouped.keys(), reverse=True)
 
-    return jsonify(result)
+    html = "<html><head><link rel='stylesheet' href='/static/style.css'></head><body>"
+    html += "<h1>Quiz Submissions (Admin View)</h1>"
+    html += "<div style='display:grid; grid-template-columns:repeat(2, 1fr); gap:20px;'>"
+
+
+    for i in range(14):
+        if i < len(sorted_dates):
+            date_key = sorted_dates[i]
+            html += f"<div class='table-box'><h2>{date_key} Leaderboard</h2>"
+            html += "<table class='leaderboard'><tr><th>Name</th><th>Phone</th><th>Question</th><th>Answer</th><th>Correct</th><th>Time Taken</th></tr>"
+            day_subs = sorted(grouped[date_key], key=lambda x: x["timeTaken"])
+            for sub in day_subs:
+                html += f"<tr><td>{sub['name']}</td><td>{sub['phone']}</td><td>{sub['questionNo']}</td><td>{sub['answer']}</td><td>{'✅' if sub['isCorrect'] else '❌'}</td><td>{sub['timeTaken']}s</td></tr>"
+            html += "</table></div>"
+        else:
+            html += f"<div class='table-box'><h2>Leaderboard {i+1} (No Data)</h2>"
+            html += "<table class='leaderboard'><tr><th>Name</th><th>Phone</th><th>Question</th><th>Answer</th><th>Correct</th><th>Time Taken</th></tr>"
+            html += "<tr><td colspan='6'>No submissions yet</td></tr></table></div>"
+
+
+    html += "</body></html>"
+    return html
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
