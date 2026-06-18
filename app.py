@@ -26,7 +26,9 @@ def load_json_file(path, default):
         try:
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except (json.JSONDecodeError, UnicodeDecodeError, IOError):
+            # If the file is missing, invalid, or corrupted, reset to default.
+            save_json_file(path, default)
             return default
     return default
 
@@ -34,6 +36,28 @@ def load_json_file(path, default):
 def save_json_file(path, data):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
+
+
+def save_submission_to_firestore(submission):
+    if not FIREBASE_ENABLED:
+        return False
+    try:
+        db.collection("submissions").add(submission)
+        return True
+    except Exception as e:
+        print("⚠️ Firestore write failed:", e)
+        return False
+
+
+def load_submissions_from_firestore():
+    if not FIREBASE_ENABLED:
+        return None
+    try:
+        docs = db.collection("submissions").stream()
+        return [doc.to_dict() for doc in docs]
+    except Exception as e:
+        print("⚠️ Firestore read failed:", e)
+        return None
 
 
 def safe_time_taken(value):
@@ -47,12 +71,12 @@ submissions = load_json_file(DATA_FILE, [])
 qa_archive = load_json_file(ARCHIVE_FILE, [])
 
 # Dates
-start_date = date(2026, 6, 19)
+start_date = date(2026, 6, 18)
 end_date = date(2026, 7, 2)
 
 # Questions
 questions = [
-    {"question": "Question 1", "choices": ["A","B","C","D"], "answer": "A"},
+    {"question": "കേരളത്തിൽ ഗ്രന്ഥശാലകളുടെ വ്യാപനത്തിനും വളർച്ചക്കും ചുക്കാൻ പിടിച്ച പി . എൻ പണിക്കരുടെ ചരമ ദിനമാണ് വായന ദിനം. പി . എൻ.പണിക്കർ മുന്നോട്ട് വച്ച നിരവധി മുദ്രാവാക്യങ്ങളുണ്ട്. താഴെ ചേർക്കുന്നതിൽ ഏതാണ് അദ്ദേഹത്തിൻ്റെ സംഭാവന.", "choices": [" വായിച്ചാൽ വളരും"," വായിച്ചു വളരുക","നല്ല ചിന്തകൾക്ക് നല്ല വായന","വായിക്കുന്നവർ പല ജീവിതങ്ങളെ ജീവിക്കുന്നു."], "answer": "A"},
     {"question": "Question 2", "choices": ["A","B","C","D"], "answer": "B"},
     {"question": "Question 3", "choices": ["A","B","C","D"], "answer": "C"},
     {"question": "Question 4", "choices": ["A","B","C","D"], "answer": "D"},
@@ -127,38 +151,70 @@ def question():
         "choices": current_question["choices"]
     })
 
+@app.route("/check-submission", methods=["POST"])
+def check_submission():
+    data = request.get_json()
+    if data is None:
+        return jsonify({"status": "error", "message": "Invalid JSON"}), 400
+    
+    phone = data.get("phone")
+    today_str = str(date.today())
+
+    if phone is None or not phone.isdigit() or len(phone) != 10:
+        return jsonify({"status": "error", "message": "Invalid phone number"}), 400
+
+    # Check if user already submitted today
+    for entry in submissions:
+        if entry["phone"] == phone and entry.get("date") == today_str:
+            return jsonify({"alreadySubmitted": True}), 200
+
+    # Also check Firestore if enabled
+    if FIREBASE_ENABLED:
+        try:
+            query = db.collection("submissions").where("phone", "==", phone).where("date", "==", today_str).limit(1).stream()
+            if list(query):
+                return jsonify({"alreadySubmitted": True}), 200
+        except Exception as e:
+            print("⚠️ Firestore check failed:", e)
+
+    return jsonify({"alreadySubmitted": False}), 200
+
 @app.route("/submit", methods=["POST"])
 def submit():
     data = request.get_json()
-    name = data.get("name")
-    phone = data.get("phone")
-    answer = data.get("answer")
+    if data is None:
+        return jsonify({"status": "error", "message": "Invalid JSON"}), 400
+
+    name = data.get("name", "").strip()
+    phone = data.get("phone", "").strip()
+    answer = data.get("answer", "").strip()
     question_no = data.get("questionNo")
     time_taken = data.get("timeTaken")
     today_str = str(date.today())
 
     # Validation
+    if not name or not phone or not answer or question_no is None:
+        return jsonify({"status": "error", "message": "Missing fields"}), 400
+
     try:
         question_no = int(question_no)
         if question_no < 1 or question_no > len(questions):
-            return jsonify({"status":"error","message":"Invalid question number"}), 400
-    except:
-        return jsonify({"status":"error","message":"Invalid question number"}), 400
+            return jsonify({"status": "error", "message": "Invalid question number"}), 400
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "Invalid question number"}), 400
 
-    if name is None or phone is None or answer is None:
-        return jsonify({"status": "error", "message": "Missing fields"}), 400
     if not phone.isdigit() or len(phone) != 10:
-        return jsonify({"status":"error","message":"Invalid phone number"}), 400
+        return jsonify({"status": "error", "message": "Invalid phone number"}), 400
     if name.lower() == "admin":
-        return jsonify({"status":"error","message":"Reserved name not allowed"}), 400
+        return jsonify({"status": "error", "message": "Reserved name not allowed"}), 400
 
     correct_answer = questions[question_no - 1]["answer"]
     is_correct = (answer == correct_answer)
 
-    # Prevent duplicate in JSON
+    # Prevent duplicate submission for the same phone number on the same day
     for entry in submissions:
-        if entry["phone"] == phone and entry.get("date") == today_str and entry.get("questionNo") == question_no:
-            return jsonify({"status": "error", "message": "Already submitted"}), 409
+        if entry["phone"] == phone and entry.get("date") == today_str:
+            return jsonify({"status": "error", "message": "Already submitted for today"}), 409
 
     submission = {
         "name": name,
@@ -170,7 +226,9 @@ def submit():
         "date": today_str
     }
 
-    # Save to JSON
+    # Save to Firestore first when available, and keep a local cache
+    firestore_saved = save_submission_to_firestore(submission)
+
     submissions.append(submission)
     save_json_file(DATA_FILE, submissions)
 
@@ -189,14 +247,10 @@ def submit():
         })
     save_json_file(ARCHIVE_FILE, qa_archive)
 
-    # Save to Firestore (optional)
-    if FIREBASE_ENABLED:
-        try:
-            db.collection("submissions").add(submission)
-        except Exception as e:
-            print("⚠️ Firestore write failed:", e)
+    if FIREBASE_ENABLED and not firestore_saved:
+        print("⚠️ Firestore save failed; saved submission to local JSON only.")
 
-    return jsonify({"status": "success", "isCorrect": is_correct, "timeTaken": time_taken})
+    return jsonify({"status": "success", "isCorrect": is_correct, "message": "Answer submitted successfully"}), 200
 
 
 @app.route("/submissions")
@@ -205,7 +259,9 @@ def submissions_view():
     if not password or unquote(password).strip() != ADMIN_PASSWORD:
         return "Unauthorized", 403
 
-    subs = load_json_file(DATA_FILE, [])
+    subs = load_submissions_from_firestore() if FIREBASE_ENABLED else None
+    if subs is None:
+        subs = load_json_file(DATA_FILE, [])
 
     if request.args.get("format") == "json" or "application/json" in request.headers.get("Accept", ""):
         grouped = {}
@@ -253,6 +309,18 @@ def submissions_view():
 
     html += "</div></div>"
     return html
+
+
+@app.route("/reset", methods=["GET"])
+def reset():
+    password = request.args.get("password")
+    if password != ADMIN_PASSWORD:
+        return "Unauthorized", 403
+    
+    # Clear JSON files
+    save_json_file(DATA_FILE, [])
+    save_json_file(ARCHIVE_FILE, [])
+    return jsonify({"status": "Database reset"}), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
