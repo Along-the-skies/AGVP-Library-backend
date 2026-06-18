@@ -10,7 +10,6 @@ CORS(app)
 DATA_FILE = "submissions.json"
 ARCHIVE_FILE = "qa_archive.json"
 ADMIN_PASSWORD = "Agp2026access_BinoyMathew"
-DATABASE_URL="postgresql://anonymous@ep-rapid-grass-aokkocyp-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
 # Load submissions
 if os.path.exists(DATA_FILE):
