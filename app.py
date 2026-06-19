@@ -60,6 +60,18 @@ def load_submissions_from_firestore():
         return None
 
 
+def clear_firestore_submissions():
+    if not FIREBASE_ENABLED:
+        return False
+    try:
+        for doc in db.collection("submissions").stream():
+            doc.reference.delete()
+        return True
+    except Exception as e:
+        print("⚠️ Firestore clear failed:", e)
+        return False
+
+
 def safe_time_taken(value):
     try:
         return float(value)
@@ -320,6 +332,13 @@ def reset():
     # Clear JSON files
     save_json_file(DATA_FILE, [])
     save_json_file(ARCHIVE_FILE, [])
+
+    # Clear Firestore submissions if enabled
+    if FIREBASE_ENABLED:
+        firestore_cleared = clear_firestore_submissions()
+        if not firestore_cleared:
+            return jsonify({"status": "Database reset locally, but Firestore clear failed"}), 500
+
     return jsonify({"status": "Database reset"}), 200
 
 if __name__ == '__main__':
