@@ -348,6 +348,27 @@ def restore():
 
     data = request.get_json()
 
+    # Save JSON backup
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    count = 0
+
+    # Replace Firestore data
+    if FIREBASE_ENABLED:
+        clear_firestore_submissions()
+
+        for day_entries in data.get("submissions", {}).values():
+            for entry in day_entries:
+                db.collection("submissions").add(entry)
+                count += 1
+
+    return jsonify({
+        "success": True,
+        "entries": count
+    })
+    data = request.get_json()
+
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
