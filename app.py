@@ -341,5 +341,20 @@ def reset():
 
     return jsonify({"status": "Database reset"}), 200
 
+@app.route("/restore", methods=["POST"])
+def restore():
+    if request.args.get("password") != ADMIN_PASSWORD:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    data = request.get_json()
+
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    return jsonify({
+        "success": True,
+        "entries": sum(len(v) for v in data.get("submissions", {}).values())
+    })
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
